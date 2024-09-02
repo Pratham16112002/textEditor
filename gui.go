@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -25,7 +24,12 @@ type gui struct {
 	title    binding.String
 	fileTree binding.URITree
 	content  *container.DocTabs
-	openTabs map[fyne.URI]*container.TabItem
+	openTabs map[fyne.URI]*tabItem
+}
+
+type tabItem struct {
+	editor  editors.Editor
+	tabItem *container.TabItem
 }
 
 func (g *gui) makeBanner() fyne.CanvasObject {
@@ -44,9 +48,9 @@ func (g *gui) makeBanner() fyne.CanvasObject {
 	})
 	new_file := widget.NewButtonWithIcon("New", theme.FileIcon(), func() {
 		new_file_dialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, err error) {
-			new_file_editor := editors.NewEditor("")
+			new_file_editor := widget.NewEntry()
 			new_file_uri := f.URI()
-			item := container.NewStack(new_file_editor.TextGrid, new_file_editor.Entry)
+			item := container.NewStack(new_file_editor, new_file_editor)
 			new_file_item := container.NewTabItemWithIcon(
 				new_file_uri.Name(),
 				theme.FileIcon(),
@@ -54,7 +58,7 @@ func (g *gui) makeBanner() fyne.CanvasObject {
 			)
 			new_file_editor.Show()
 			g.content.Append(new_file_item)
-			g.openTabs[new_file_uri] = new_file_item
+			g.openTabs[new_file_uri].tabItem = new_file_item
 			g.content.Select(new_file_item)
 		}, g.win)
 		new_file_dialog.Show()
@@ -104,7 +108,7 @@ func (g *gui) makeGUI() fyne.CanvasObject {
 	g.content.CloseIntercept = func(i *container.TabItem) {
 		var itemURI fyne.URI
 		for uri, item := range g.openTabs {
-			if i == item {
+			if i == item.tabItem {
 				itemURI = uri
 			}
 		}
@@ -173,33 +177,35 @@ func (g *gui) openFile(uri fyne.URI) {
 		}
 		return
 	}
-	if g.openTabs == nil {
-		g.openTabs = make(map[fyne.URI]*container.TabItem)
-	}
-	if item, ok := g.openTabs[uri]; ok {
-		g.content.Select(item)
-		g.content.Refresh()
+	edit, err := editors.ForURI(uri)
+	if err != nil {
+		dialog.ShowError(err, g.win)
 		return
 	}
-	fileReader, _ := storage.Reader(uri)
-	fileContent, _ := io.ReadAll(fileReader)
-	edit := editors.NewEditor(string(fileContent))
-	item := container.NewTabItemWithIcon(uri.Name(), theme.FileIcon(), tab_item)
+	if g.openTabs == nil {
+		g.openTabs = make(map[fyne.URI]*tabItem)
+	}
+	item := container.NewTabItemWithIcon(uri.Name(), theme.FileIcon(), edit.Content())
+	g.openTabs[uri] = &tabItem{
+		editor:  edit,
+		tabItem: item,
+	}
 
-	g.openTabs[uri] = item
 	for _, tab := range g.content.Items {
 		if tab.Text != uri.Name() {
 			continue
 		}
 		for c_uri, child := range g.openTabs {
-			if child != tab {
+			if child.tabItem != tab {
 				continue
 			}
 			parent, _ := storage.Parent(c_uri)
-			child.Text = parent.Name() + string([]rune{filepath.Separator}) + child.Text
+			child.tabItem.Text = parent.Name() + string(
+				[]rune{filepath.Separator},
+			) + child.tabItem.Text
 		}
 		parent, _ := storage.Parent(uri)
-		item.Text = parent.Name() + string([]rune{filepath.Separator}) + item.Text
+		tab.Text = parent.Name() + string([]rune{filepath.Separator}) + tab.Text
 		break
 	}
 	g.content.Append(item)
