@@ -16,7 +16,7 @@ func main() {
 	a.Settings().SetTheme(NewCustomTheme())
 	w := a.NewWindow("IDE")
 	w.Resize(fyne.NewSize(1024, 768))
-	win := &gui{win: w}
+	win := &gui{win: w, title: binding.NewString()}
 	w.SetContent(win.makeGUI())
 	w.SetMainMenu(win.makeMenu())
 	win.title.AddListener(binding.NewDataListener(func() {
@@ -42,7 +42,7 @@ func main() {
 		}
 		win.openProject(dir)
 	} else {
-		win.openProjectDialog()
+		win.ShowCreate(w)
 	}
 	w.ShowAndRun()
 }

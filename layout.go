@@ -9,11 +9,20 @@ const sideWidth = 220
 
 type customLayout struct {
 	top, left, right, content fyne.CanvasObject
-	seperators                [3]fyne.CanvasObject
+	seperators                [2]fyne.CanvasObject
 }
 
-func CustomLayout(top, left, right, content fyne.CanvasObject, seperators [3]fyne.CanvasObject) fyne.Layout {
-	return &customLayout{top: top, left: left, right: right, content: content, seperators: seperators}
+func CustomLayout(
+	top, left, right, content fyne.CanvasObject,
+	seperators [2]fyne.CanvasObject,
+) fyne.Layout {
+	return &customLayout{
+		top:        top,
+		left:       left,
+		right:      right,
+		content:    content,
+		seperators: seperators,
+	}
 }
 
 func (l *customLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
@@ -23,11 +32,8 @@ func (l *customLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	l.left.Move(fyne.NewPos(0, topHeight))
 	l.left.Resize(fyne.NewSize(sideWidth, size.Height-topHeight))
 
-	l.right.Move(fyne.NewPos(size.Width-sideWidth, topHeight))
-	l.right.Resize(fyne.NewSize(sideWidth, size.Height-topHeight))
-
 	l.content.Move(fyne.NewPos(sideWidth, topHeight))
-	l.content.Resize(fyne.NewSize(size.Width-2*sideWidth, size.Height-topHeight))
+	l.content.Resize(fyne.NewSize(size.Width-sideWidth, size.Height-topHeight))
 
 	seperatorThickness := theme.SeparatorThicknessSize()
 
@@ -36,10 +42,6 @@ func (l *customLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 
 	l.seperators[1].Move(fyne.NewPos(sideWidth, topHeight))
 	l.seperators[1].Resize(fyne.NewSize(seperatorThickness, size.Height-topHeight))
-
-	l.seperators[2].Move(fyne.NewPos(size.Width-sideWidth, topHeight))
-	l.seperators[2].Resize(fyne.NewSize(seperatorThickness, size.Height-topHeight))
-
 }
 
 func (l *customLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
