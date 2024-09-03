@@ -19,7 +19,6 @@ func createProject(name string, parent fyne.ListableURI) (fyne.ListableURI, erro
 	if err != nil {
 		return nil, err
 	}
-	fmt.Print(dir.Name())
 	mod, err := storage.Child(dir, "go.mod")
 	if err != nil {
 		return nil, err
@@ -39,6 +38,7 @@ go 1.22.6`, name))
 
 func (g *gui) openProject(dir fyne.ListableURI) {
 	g.title.Set(dir.Name())
+	g.curDir = dir
 	// Reseting the filetree before loading a new project.
 	g.fileTree.Set(map[string][]string{}, map[string]fyne.URI{})
 	addFilesToTree(dir, g.fileTree, binding.DataTreeRootID)

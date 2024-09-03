@@ -4,6 +4,7 @@ import (
 	"io"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 )
@@ -19,6 +20,16 @@ func newCodeEntry(w fyne.Window) *codeEntry {
 	c.ExtendBaseWidget(c)
 	c.MultiLine = true
 	return c
+}
+
+func (c *codeEntry) TypedShortcut(s fyne.Shortcut) {
+	if sh, ok := s.(*desktop.CustomShortcut); ok {
+		if sh.KeyName == fyne.KeyS && sh.Modifier == fyne.KeyModifierShortcutDefault {
+			c.save()
+			return
+		}
+	}
+	c.Entry.TypedShortcut(s)
 }
 
 func makeTxt(u fyne.URI) (Editor, error) {
@@ -37,7 +48,7 @@ func makeTxt(u fyne.URI) (Editor, error) {
 	code.SetText(string(data))
 	edit := &SimpleEditor{content: code, save: save}
 	code.OnChanged = func(_ string) {
-		edit.Edited().Set(false)
+		edit.Edited().Set(true)
 	}
 	code.save = edit.Save
 	return edit, err

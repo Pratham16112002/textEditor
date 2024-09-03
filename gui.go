@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"image/color"
 	"os"
 	"path/filepath"
 
@@ -12,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -25,11 +25,61 @@ type gui struct {
 	fileTree binding.URITree
 	content  *container.DocTabs
 	openTabs map[fyne.URI]*tabItem
+	curDir   fyne.ListableURI
 }
 
 type tabItem struct {
 	editor  editors.Editor
 	tabItem *container.TabItem
+}
+
+func (g *gui) makeMenu() *fyne.MainMenu {
+	save := fyne.NewMenuItem("Save", func() {
+		current_selected := g.content.Selected()
+		for _, item := range g.openTabs {
+			if item.tabItem == current_selected {
+				err := item.editor.Save()
+				if err != nil {
+					dialog.ShowError(err, g.win)
+				}
+			}
+		}
+	})
+	save.Shortcut = &desktop.CustomShortcut{
+		KeyName:  fyne.KeyS,
+		Modifier: fyne.KeyModifierShortcutDefault,
+	}
+	file := fyne.NewMenu("File",
+		fyne.NewMenuItem("Open project", g.openProjectDialog),
+		fyne.NewMenuItem("New File", func() {
+			new_file_dialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, err error) {
+				if err != nil || f == nil {
+					return
+				}
+				new_file_editor, err := editors.ForURI(f.URI())
+				new_file_uri := f.URI()
+				new_file_item := container.NewTabItemWithIcon(
+					new_file_uri.Name(),
+					theme.FileIcon(),
+					new_file_editor.Content(),
+				)
+				if g.openTabs == nil {
+					g.openTabs = make(map[fyne.URI]*tabItem)
+				}
+				g.openTabs[new_file_uri] = &tabItem{
+					editor:  new_file_editor,
+					tabItem: new_file_item,
+				}
+				g.content.Append(new_file_item)
+				g.content.Select(new_file_item)
+				g.content.Refresh()
+			}, g.win)
+			new_file_dialog.SetLocation(g.curDir)
+			new_file_dialog.Show()
+		}),
+		save,
+	)
+	return fyne.NewMainMenu(file)
 }
 
 func (g *gui) makeBanner() fyne.CanvasObject {
@@ -46,24 +96,7 @@ func (g *gui) makeBanner() fyne.CanvasObject {
 	}))
 	home := widget.NewButtonWithIcon("Home", theme.HomeIcon(), func() {
 	})
-	new_file := widget.NewButtonWithIcon("New", theme.FileIcon(), func() {
-		new_file_dialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, err error) {
-			new_file_editor := widget.NewEntry()
-			new_file_uri := f.URI()
-			item := container.NewStack(new_file_editor, new_file_editor)
-			new_file_item := container.NewTabItemWithIcon(
-				new_file_uri.Name(),
-				theme.FileIcon(),
-				item,
-			)
-			new_file_editor.Show()
-			g.content.Append(new_file_item)
-			g.openTabs[new_file_uri].tabItem = new_file_item
-			g.content.Select(new_file_item)
-		}, g.win)
-		new_file_dialog.Show()
-	})
-	left := container.NewHBox(home, new_file, title)
+	left := container.NewHBox(home, title)
 
 	logo := canvas.NewImageFromResource(resourceLogoSvg)
 	logo.FillMode = canvas.ImageFillContain
@@ -95,15 +128,11 @@ func (g *gui) makeGUI() fyne.CanvasObject {
 		}
 		g.openFile(u)
 	}
-	project_title, _ := g.title.Get()
-	welcome := widget.NewRichTextFromMarkdown(`
-    # Welcome
+	welcome := widget.NewRichTextFromMarkdown(`# Welcome
     Open a file from file tree
-    `)
-	preview := container.NewBorder(nil, nil, nil, nil, welcome)
-	content := container.NewStack(canvas.NewRectangle(color.Gray{Y: 0xee}), preview)
+`)
 	g.content = container.NewDocTabs(
-		container.NewTabItemWithIcon(project_title, theme.FileIcon(), content),
+		container.NewTabItem("Welcome", welcome),
 	)
 	g.content.CloseIntercept = func(i *container.TabItem) {
 		var itemURI fyne.URI
@@ -185,7 +214,23 @@ func (g *gui) openFile(uri fyne.URI) {
 	if g.openTabs == nil {
 		g.openTabs = make(map[fyne.URI]*tabItem)
 	}
+
+	if g.openTabs[uri] != nil {
+		g.content.Select(g.openTabs[uri].tabItem)
+		return
+	}
+
 	item := container.NewTabItemWithIcon(uri.Name(), theme.FileIcon(), edit.Content())
+	dirty := edit.Edited()
+	dirty.AddListener(binding.NewDataListener(func() {
+		isEdited, _ := dirty.Get()
+		if isEdited {
+			item.Text = uri.Name() + "*"
+		} else {
+			item.Text = uri.Name()
+		}
+		g.content.Refresh()
+	}))
 	g.openTabs[uri] = &tabItem{
 		editor:  edit,
 		tabItem: item,
@@ -199,8 +244,8 @@ func (g *gui) openFile(uri fyne.URI) {
 			if child.tabItem != tab {
 				continue
 			}
-			parent, _ := storage.Parent(c_uri)
-			child.tabItem.Text = parent.Name() + string(
+			child_parent, _ := storage.Parent(c_uri)
+			child.tabItem.Text = child_parent.Name() + string(
 				[]rune{filepath.Separator},
 			) + child.tabItem.Text
 		}
@@ -234,6 +279,7 @@ func (g *gui) projectDetails(wizard *dialogs.Wizard) fyne.CanvasObject {
 			chosen = f
 		}, g.win)
 		d.SetLocation(chosen)
+		g.curDir = chosen
 		d.Show()
 		// TODO open diaglog
 	})

@@ -23,7 +23,7 @@ func (t *customTheme) Color(name fyne.ThemeColorName, varient fyne.ThemeVariant)
 
 func (t *customTheme) Size(name fyne.ThemeSizeName) float32 {
 	if name == theme.SizeNameText {
-		return 12.0
+		return 14.0
 	}
 	return t.Theme.Size(name)
 }

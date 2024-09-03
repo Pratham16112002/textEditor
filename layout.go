@@ -5,7 +5,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
-const sideWidth = 220
+const sideWidth = 320
 
 type customLayout struct {
 	top, left, right, content fyne.CanvasObject
