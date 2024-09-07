@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -26,6 +25,7 @@ type gui struct {
 	content  *container.DocTabs
 	openTabs map[fyne.URI]*tabItem
 	curDir   fyne.ListableURI
+	menu     *fyne.MainMenu
 }
 
 type tabItem struct {
@@ -33,7 +33,7 @@ type tabItem struct {
 	tabItem *container.TabItem
 }
 
-func (g *gui) makeMenu() *fyne.MainMenu {
+func (g *gui) makeMenu() {
 	save := fyne.NewMenuItem("Save", func() {
 		current_selected := g.content.Selected()
 		for _, item := range g.openTabs {
@@ -79,7 +79,10 @@ func (g *gui) makeMenu() *fyne.MainMenu {
 		}),
 		save,
 	)
-	return fyne.NewMainMenu(file)
+	if g.menu == nil {
+		g.menu = fyne.NewMainMenu()
+	}
+	g.menu.Items = append(g.menu.Items, file)
 }
 
 func (g *gui) makeBanner() fyne.CanvasObject {
@@ -107,17 +110,22 @@ func (g *gui) makeGUI() fyne.CanvasObject {
 	top := g.makeBanner()
 	g.fileTree = binding.NewURITree()
 	files := widget.NewTreeWithData(g.fileTree, func(isBranch bool) fyne.CanvasObject {
-		return widget.NewLabel("filename.jpg")
+		temp := binding.NewString()
+		temp.Set("filename.jpg")
+		fileName, _ := temp.Get()
+		return widget.NewLabel(fileName)
 	}, func(data binding.DataItem, isBranch bool, obj fyne.CanvasObject) {
 		l := obj.(*widget.Label)
-		u, _ := data.(binding.URI).Get()
-
-		name := u.Name()
-		l.SetText(name)
+		bindingURL := data.(binding.URI)
+		u, err := bindingURL.Get()
+		if err != nil {
+			dialog.ShowError(err, g.win)
+			return
+		}
+		l.SetText(u.Name())
 	})
 	left := widget.NewAccordion(
 		widget.NewAccordionItem("Files", files),
-		widget.NewAccordionItem("Screens", widget.NewLabel("TODO Screens")),
 	)
 	left.Open(0)
 	left.MultiOpen = true
@@ -156,8 +164,7 @@ func (g *gui) makeGUI() fyne.CanvasObject {
 		seperators[0],
 		seperators[1],
 	}
-	g.win.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
-		fmt.Print(key.Physical)
+	g.win.Canvas().SetOnTypedKey(func(s *fyne.KeyEvent) {
 	})
 	return container.New(CustomLayout(top, left, nil, g.content, seperators), obj...)
 }
@@ -207,6 +214,22 @@ func (g *gui) openFile(uri fyne.URI) {
 		return
 	}
 	edit, err := editors.ForURI(uri)
+	edit.GetURI().AddListener(binding.NewDataListener(func() {
+		newFileURI, err := edit.GetURI().Get()
+		if err != nil {
+			dialog.ShowError(err, g.win)
+			return
+		}
+		for index, item := range g.content.Items {
+			if index == g.content.SelectedIndex() {
+				item.Text = newFileURI.Name()
+				g.openTabs[newFileURI].editor = edit
+				g.openTabs[newFileURI].tabItem = g.content.Selected()
+				g.content.Refresh()
+				break
+			}
+		}
+	}))
 	if err != nil {
 		dialog.ShowError(err, g.win)
 		return

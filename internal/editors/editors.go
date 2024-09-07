@@ -16,6 +16,7 @@ type Editor interface {
 	Content() fyne.CanvasObject
 	Edited() binding.Bool
 	Save() error
+	GetURI() binding.URI
 }
 
 var mimes = map[string]func(fyne.URI) (Editor, error){
@@ -45,13 +46,16 @@ func makeMd(u fyne.URI) (Editor, error) {
 		dirty(s)
 	}
 	code.(*SimpleEditor).content = container.NewHSplit(txt, container.NewScroll(preview))
+	code.(*SimpleEditor).uri.Set(u)
 	return code, err
 }
 
 func makeImg(u fyne.URI) (Editor, error) {
 	img := canvas.NewImageFromURI(u)
 	img.FillMode = canvas.ImageFillContain
-	return &SimpleEditor{content: img}, nil
+	bindingURI := binding.NewURI()
+	bindingURI.Set(u)
+	return &SimpleEditor{content: img, uri: bindingURI}, nil
 }
 
 func ForURI(u fyne.URI) (Editor, error) {
@@ -68,7 +72,6 @@ func ForURI(u fyne.URI) (Editor, error) {
 	if matched == nil {
 		edit, ok := mimes[u.MimeType()]
 		if !ok {
-
 			warning := fmt.Sprintf("Unable to open edtor for %s mime : %s", u.Name(), u.MimeType())
 			return nil, errors.New(warning)
 		}
@@ -89,14 +92,23 @@ func makeGo(u fyne.URI) (Editor, error) {
 	code, err := makeTxt(u)
 	if code != nil {
 		code.(*SimpleEditor).content.(*codeEntry).TextStyle = fyne.TextStyle{Monospace: true}
+		code.(*SimpleEditor).uri.Set(u)
 	}
 	return code, err
 }
 
 type SimpleEditor struct {
+	uri     binding.URI
 	content fyne.CanvasObject
 	edited  binding.Bool
 	save    func() error
+}
+
+func (s *SimpleEditor) GetURI() binding.URI {
+	if s.uri == nil {
+		return binding.NewURI()
+	}
+	return s.uri
 }
 
 func (s *SimpleEditor) Content() fyne.CanvasObject {

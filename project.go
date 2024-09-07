@@ -44,6 +44,12 @@ func (g *gui) openProject(dir fyne.ListableURI) {
 	addFilesToTree(dir, g.fileTree, binding.DataTreeRootID)
 }
 
+func refreshTree(dir fyne.ListableURI) binding.URITree {
+	tempTree := binding.NewURITree()
+	addFilesToTree(dir, tempTree, binding.DataTreeRootID)
+	return tempTree
+}
+
 func addFilesToTree(dir fyne.ListableURI, tree binding.URITree, root string) {
 	items, _ := dir.List()
 	for _, uri := range items {

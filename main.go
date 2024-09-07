@@ -18,7 +18,8 @@ func main() {
 	w.Resize(fyne.NewSize(1024, 768))
 	win := &gui{win: w, title: binding.NewString()}
 	w.SetContent(win.makeGUI())
-	w.SetMainMenu(win.makeMenu())
+	win.makeMenu()
+	w.SetMainMenu(win.menu)
 	win.title.AddListener(binding.NewDataListener(func() {
 		name, _ := win.title.Get()
 		w.SetTitle("IDE : " + name)
