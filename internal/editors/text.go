@@ -36,14 +36,6 @@ func (c *codeEntry) TypedShortcut(s fyne.Shortcut) {
 			c.save()
 			return
 		}
-		if sh.KeyName == fyne.KeyR && sh.Modifier == fyne.KeyModifierShortcutDefault {
-			err := c.rename()
-			if err != nil {
-				dialog.ShowError(err, c.win)
-				return
-			}
-			return
-		}
 	}
 	c.Entry.TypedShortcut(s)
 }

@@ -2,8 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -11,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -26,6 +29,7 @@ type gui struct {
 	openTabs map[fyne.URI]*tabItem
 	curDir   fyne.ListableURI
 	menu     *fyne.MainMenu
+	eContent fyne.CanvasObject
 }
 
 type tabItem struct {
@@ -56,23 +60,31 @@ func (g *gui) makeMenu() {
 				if err != nil || f == nil {
 					return
 				}
-				new_file_editor, err := editors.ForURI(f.URI())
 				new_file_uri := f.URI()
-				new_file_item := container.NewTabItemWithIcon(
-					new_file_uri.Name(),
-					theme.FileIcon(),
-					new_file_editor.Content(),
-				)
-				if g.openTabs == nil {
-					g.openTabs = make(map[fyne.URI]*tabItem)
+
+				parent_URI, err := storage.Parent(new_file_uri)
+				if err != nil {
+					dialog.ShowError(err, g.win)
+					return
 				}
-				g.openTabs[new_file_uri] = &tabItem{
-					editor:  new_file_editor,
-					tabItem: new_file_item,
+				fmt.Println(g.curDir.Name())
+				fmt.Println(parent_URI.Name())
+				err = g.fileTree.Append(parent_URI.String(), new_file_uri.String(), new_file_uri)
+				if g.curDir.Name() == parent_URI.Name() {
+					err = g.fileTree.Append(
+						binding.DataTreeRootID,
+						new_file_uri.String(),
+						new_file_uri,
+					)
+				} else {
+					err = g.fileTree.Append(parent_URI.String(), new_file_uri.String(), new_file_uri)
 				}
-				g.content.Append(new_file_item)
-				g.content.Select(new_file_item)
-				g.content.Refresh()
+				if err != nil {
+					dialog.ShowError(err, g.win)
+					return
+				}
+				g.win.Content().Refresh()
+				g.openFile(new_file_uri)
 			}, g.win)
 			new_file_dialog.SetLocation(g.curDir)
 			new_file_dialog.Show()
@@ -83,6 +95,13 @@ func (g *gui) makeMenu() {
 		g.menu = fyne.NewMainMenu()
 	}
 	g.menu.Items = append(g.menu.Items, file)
+}
+
+func updateTime(clock *widget.Label) {
+	formattedTime := time.Now().Format("03:04:05")
+	canvasTime := canvas.NewText(formattedTime, theme.ForegroundColor())
+	canvasTime.TextSize = 14
+	clock.SetText(canvasTime.Text)
 }
 
 func (g *gui) makeBanner() fyne.CanvasObject {
@@ -99,11 +118,18 @@ func (g *gui) makeBanner() fyne.CanvasObject {
 	}))
 	home := widget.NewButtonWithIcon("Home", theme.HomeIcon(), func() {
 	})
+	timeWidget := widget.NewLabel("")
+	go func() {
+		for range time.Tick(time.Second) {
+			updateTime(timeWidget)
+		}
+	}()
 	left := container.NewHBox(home, title)
-
+	wrapper := container.NewHBox(left, layout.NewSpacer(), timeWidget)
 	logo := canvas.NewImageFromResource(resourceLogoSvg)
 	logo.FillMode = canvas.ImageFillContain
-	return container.NewStack(left, container.NewPadded(logo))
+	stack := container.NewStack(wrapper, container.NewPadded(logo))
+	return stack
 }
 
 func (g *gui) makeGUI() fyne.CanvasObject {
@@ -125,7 +151,7 @@ func (g *gui) makeGUI() fyne.CanvasObject {
 		l.SetText(u.Name())
 	})
 	left := widget.NewAccordion(
-		widget.NewAccordionItem("Files", files),
+		widget.NewAccordionItem("Files", container.NewScroll(files)),
 	)
 	left.Open(0)
 	left.MultiOpen = true
@@ -166,7 +192,9 @@ func (g *gui) makeGUI() fyne.CanvasObject {
 	}
 	g.win.Canvas().SetOnTypedKey(func(s *fyne.KeyEvent) {
 	})
-	return container.New(CustomLayout(top, left, nil, g.content, seperators), obj...)
+	g.eContent = container.New(CustomLayout(top, left, nil, g.content, seperators), obj...)
+
+	return g.eContent
 }
 
 func (g *gui) openProjectDialog() {
@@ -214,26 +242,11 @@ func (g *gui) openFile(uri fyne.URI) {
 		return
 	}
 	edit, err := editors.ForURI(uri)
-	edit.GetURI().AddListener(binding.NewDataListener(func() {
-		newFileURI, err := edit.GetURI().Get()
-		if err != nil {
-			dialog.ShowError(err, g.win)
-			return
-		}
-		for index, item := range g.content.Items {
-			if index == g.content.SelectedIndex() {
-				item.Text = newFileURI.Name()
-				g.openTabs[newFileURI].editor = edit
-				g.openTabs[newFileURI].tabItem = g.content.Selected()
-				g.content.Refresh()
-				break
-			}
-		}
-	}))
 	if err != nil {
 		dialog.ShowError(err, g.win)
 		return
 	}
+
 	if g.openTabs == nil {
 		g.openTabs = make(map[fyne.URI]*tabItem)
 	}
@@ -243,7 +256,11 @@ func (g *gui) openFile(uri fyne.URI) {
 		return
 	}
 
-	item := container.NewTabItemWithIcon(uri.Name(), theme.FileIcon(), edit.Content())
+	item := container.NewTabItemWithIcon(
+		uri.Name(),
+		theme.FileIcon(),
+		edit.Content(),
+	)
 	dirty := edit.Edited()
 	dirty.AddListener(binding.NewDataListener(func() {
 		isEdited, _ := dirty.Get()

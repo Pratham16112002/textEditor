@@ -39,15 +39,8 @@ go 1.22.6`, name))
 func (g *gui) openProject(dir fyne.ListableURI) {
 	g.title.Set(dir.Name())
 	g.curDir = dir
-	// Reseting the filetree before loading a new project.
 	g.fileTree.Set(map[string][]string{}, map[string]fyne.URI{})
 	addFilesToTree(dir, g.fileTree, binding.DataTreeRootID)
-}
-
-func refreshTree(dir fyne.ListableURI) binding.URITree {
-	tempTree := binding.NewURITree()
-	addFilesToTree(dir, tempTree, binding.DataTreeRootID)
-	return tempTree
 }
 
 func addFilesToTree(dir fyne.ListableURI, tree binding.URITree, root string) {
